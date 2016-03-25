@@ -1,0 +1,153 @@
+---
+title: 'Practical Machine Learning Prediction Project '
+output:
+  html_document:
+    keep_md: yes
+  pdf_document: default
+  word_document: default
+---
+
+Author Name: Wojciech Ambro¿ewicz
+
+#Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+        In this project, our goal is  to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here:http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# Data Processing 
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Download data and load into the data frame
+We load given data to the data frame
+```{r echo = TRUE,cache=TRUE}
+given_training<-read.csv("C:/COURSERA/Machine Learning/Project/pml-training.csv",stringsAsFactors=FALSE)
+given_testing<-read.csv("C:/COURSERA/Machine Learning/Project/pml-testing.csv",stringsAsFactors=FALSE)
+```
+
+We count number of loaded into the data frame rows:
+
+```{r echo = TRUE}
+nrow(given_training)
+nrow(given_testing)
+```
+
+## Clean and process data
+We analyze  contend of prepared data frame:
+
+```{r echo = TRUE,cache=TRUE}
+str(given_testing)
+```
+
+From the whole training and testing data sets we want to extract only the part which we will probably need in our analyze. In order to do it we have to analyze its content more deeply.
+We count a NA`s in each column:
+
+```{r echo = TRUE}
+tna_re<-as.data.frame(sapply(given_testing, function(x) sum(is.na(x))))
+na_re<-as.data.frame(sapply(given_training, function(x) sum(is.na(x))))
+```
+
+We count unique values in each column:
+
+```{r echo = TRUE}
+tnr_uniq<-as.data.frame(sapply(given_testing, function(x) length(unique(x))))
+nr_uniq<-as.data.frame(sapply(given_training, function(x) length(unique(x))))
+```
+
+Now we collect all this data together
+
+```{r echo = TRUE}
+tstat<-cbind(tna_re,tnr_uniq)
+names(tstat)<- c("tNA_count","tnr_unique")
+stat<-cbind(na_re,nr_uniq)
+names(stat)<- c("NA_count","nr_unique")
+stat_all<-cbind(stat,tstat)
+
+```
+Let's see what we have:
+```{r echo = TRUE}
+stat_all
+```
+
+The is no need to use for prediction factors with Na's so we remove them
+
+```{r echo = TRUE}
+xx<-subset(stat_all,NA_count==0)
+xx<-subset(xx,tNA_count==0)
+final<-xx[1:60,]
+selected_columns<-rownames(final)
+train_used<-given_training[,selected_columns]
+```
+
+#Results
+
+In this part of analysis we are going to build tree prediction models with various set of features. In order  to make the comparable we will use only one, a decision tree, method.
+In the beginning we make two partitions: 
+
+```{r echo = TRUE}
+library(caret)
+library(rpart)
+train_part = createDataPartition(train_used$classe, p = 0.6, list = FALSE)
+training_all = train_used[train_part, ]
+testing_all = train_used[-train_part, ]
+set.seed(1777)
+```
+
+
+## Model nr 1
+
+The first model we will build using all chosen before features
+
+```{r echo = TRUE}
+training<-training_all
+testing<-testing_all
+modFit1 <- rpart(classe ~ ., data=training, method="class")
+predictions1 <- predict(modFit1, testing, type = "class")
+confusionMatrix(predictions1, testing$classe)
+```
+
+## Model nr 2
+
+The second model we will build using only the one feature:raw_timestamp_part_1.
+There is an interesting relationship with it and the class: In the training data there are 837 unique values in the column row_timestamp_part_1. Happily 816 of 837 refers only to one unique value in the class column. So a accuracy of this model should be no less then (816/837) * 100 (97,4%). Lets check:  
+
+```{r}
+training<-training_all[,c('raw_timestamp_part_1','classe')]
+testing<-testing_all[,c('raw_timestamp_part_1','classe')]
+
+modFit2 <- rpart(classe ~ ., data=training, method="class")
+predictions2 <- predict(modFit2, testing, type = "class")
+confusionMatrix(predictions2, testing$classe)
+```
+
+As we can see the accuracy is higher then 97,4%
+
+## Model nr 3
+
+The third model we will build using only the one feature referring only to actual measurements 
+
+```{r}
+training<-training_all[,8:60]
+testing<-testing_all[,8:60]
+modFit3 <- rpart(classe ~ ., data=training, method="class")
+predictions3 <- predict(modFit3, testing, type = "class")
+confusionMatrix(predictions3, testing$classe)
+```
+
+Unfortunately in this model the accuracy is not as high in the previous
+
+## Final prediction
+
+Finally we use model nr 2 to make prediction for a given testing data
+
+```{r}
+testing_final<-given_testing[,c('raw_timestamp_part_1','user_name')]
+names(testing_final)<-c('raw_timestamp_part_1','class')
+predictions_final <- predict(modFit2, newdata=testing_final)
+round(predictions_final) 
+
+```
